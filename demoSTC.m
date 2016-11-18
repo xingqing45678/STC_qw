@@ -8,20 +8,30 @@ clc;close all;clear all;
 %%
 fftw('planner','patient')
 %% set path
-imgDir='D:\ImageData\David\';%图片文件夹路径名
+imgDir='D:\ImageData\Coke\';%图片文件夹路径名
 addpath([imgDir '\img']);
 img_dir = dir([imgDir 'img\*.jpg']);%图片
 %% load video info
 %% Read files 
-guroundtruth = csvread([imgDir 'groundtruth_rect.txt']);%序列中真实目标位置
-%% initialization
-initstate =guroundtruth(1,1:4);%x,y,w,h目标框大小
-pos = [initstate(2)+initstate(4)/2 initstate(1)+initstate(3)/2];%center of the target
-target_sz = [initstate(4) initstate(3)];%initial size of the target
+ground_rect = csvread([imgDir 'groundtruth_rect.txt']);%序列中真实目标位置
+%% initialization get groundtruth and x y w h
+if(size(ground_rect,2)==1)%一列
+    error('please add "," in groundtruth');%x,y,w,h目标框大小
+else if(size(ground_rect,2)==4)%4列
+    ground_truth=ground_rect;%x,y,w,h目标框大小
+else
+    error('something wrong in groundtruth');
+    end
+end
+%% set initial position and size
+target_sz = [ground_truth(1,4), ground_truth(1,3)];
+pos = [ground_truth(1,2), ground_truth(1,1)] + floor(target_sz/2);
 %% parameters according to the paper
 padding = 1;					%extra area surrounding the target
 rho = 0.075;			        %the learning parameter \rho in Eq.(12)
 sz = floor(target_sz * (1 + padding));% size of context region
+time = 0;  %to calculate FPS
+positions = zeros(numel(img_dir), 2);  %to calculate precision
 %% parameters of scale update. See Eq.(15)
 scale = 1;%initial scale ratio
 lambda = 0.25;% \lambda in Eq.(15)
@@ -53,6 +63,7 @@ for frame = 1:numel(img_dir),
         im=img;
 	end
    	contextprior = get_context(im, pos, sz, window);% the context prior model Eq.(4)
+    tic()
     %%
     if frame > 1,
 		%calculate response of the confidence map at all locations
@@ -60,6 +71,7 @@ for frame = 1:numel(img_dir),
        	%target location is at the maximum response
 		[row, col] = find(confmap == max(confmap(:)), 1);
         pos = pos - sz/2 + [row, col]; 
+        %%
         contextprior = get_context(im, pos, sz, window);
         conftmp = real(ifft2(Hstcf.*fft2(contextprior))); 
         maxconf(frame-1)=max(conftmp(:));
@@ -73,6 +85,10 @@ for frame = 1:numel(img_dir),
         end  
         %%
     end	
+    %% 
+    %save position and calculate FPS
+    positions(frame,:) = pos;
+    time = time + toc();
 	%% update the spatial context model h^{sc} in Eq.(9)
    	contextprior = get_context(im, pos, sz, window); 
     hscf = conff./(fft2(contextprior)+eps);% Note the hscf is the FFT of hsc in Eq.(9)
@@ -97,7 +113,7 @@ for frame = 1:numel(img_dir),
                 set(im_handle, 'CData', img)
                 set(rect_handle, 'Position', rect_position)
                 set(tex_handle, 'string', strcat('#',num2str(frame)))
-                pause(0.001);
+%                 pause(0.001);
                 drawnow;
             catch  % #ok, user has closed the window
                 return
@@ -113,3 +129,7 @@ for frame = 1:numel(img_dir),
 %     hold off;
 %     drawnow;    
 end
+disp(['Frames-per-second: ' num2str(numel(img_dir) / time)])
+
+%show the precisions plot
+show_precision(positions, ground_truth, imgDir)
