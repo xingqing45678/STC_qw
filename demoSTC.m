@@ -85,14 +85,31 @@ for frame = 1:numel(img_dir),
     end
     %% visualization
     target_sz([2,1]) = target_sz([2,1])*scale;% update object size
-	rect_position = [pos([2,1]) - (target_sz([2,1])/2), (target_sz([2,1]))];  
-    imagesc(uint8(img))
-    colormap(gray)
-    rectangle('Position',rect_position,'LineWidth',4,'EdgeColor','r');
-    hold on;
-    text(5, 18, strcat('#',num2str(frame)), 'Color','y', 'FontWeight','bold', 'FontSize',20);
-    set(gca,'position',[0 0 1 1]); 
-    pause(0.001); 
-    hold off;
-    drawnow;    
+	rect_position = [pos([2,1]) - (target_sz([2,1])/2), (target_sz([2,1]))]; 
+        if frame == 1,  %first frame, create GUI
+            figure
+            im_handle = imagesc(uint8(img));
+            rect_handle = rectangle('Position',rect_position,'LineWidth',2,'EdgeColor','r');
+            tex_handle = text(5, 18, strcat('#',num2str(frame)), 'Color','y', 'FontWeight','bold', 'FontSize',20);
+            drawnow;
+        else
+            try  %subsequent frames, update GUI
+                set(im_handle, 'CData', img)
+                set(rect_handle, 'Position', rect_position)
+                set(tex_handle, 'string', strcat('#',num2str(frame)))
+                pause(0.001);
+                drawnow;
+            catch  % #ok, user has closed the window
+                return
+            end
+        end
+%     imagesc(uint8(img))
+%     colormap(gray)
+%     rectangle('Position',rect_position,'LineWidth',4,'EdgeColor','r');
+%     hold on;
+%     text(5, 18, strcat('#',num2str(frame)), 'Color','y', 'FontWeight','bold', 'FontSize',20);
+%     set(gca,'position',[0 0 1 1]); 
+%     pause(0.001); 
+%     hold off;
+%     drawnow;    
 end
